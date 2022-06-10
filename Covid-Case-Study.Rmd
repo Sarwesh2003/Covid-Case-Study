@@ -1,0 +1,511 @@
+---
+title: "Covid-Case-Study"
+author: "Sarwesh Khairnar"
+date: '2022-06-10'
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<center>![""](./assets/welcome.webp)</center>
+
+# Installing the Dependencies
+
+```{r}
+#install.packages("readxl")
+#install.packages("lubridate")
+#install.packages("scales")
+#install.packages("klaR")
+```
+
+# Importing Libraries
+```{r}
+library(tm)
+library("plotrix")
+library(lessR)
+library(dplyr)
+library(scales)
+library(ggplot2)
+library(ggpubr)
+library(wordcloud)
+library(RColorBrewer)
+library(wordcloud2)
+library(readxl)
+library(lubridate)
+library(caret)
+library(klaR)
+library(car)
+library('caTools')
+library(caTools)
+library(ROCR)
+```
+
+# Importing dataset
+```{r}
+raw_data <- read.csv(file.choose())
+```
+
+```{r}
+raw_data
+```
+
+# Data Preprocessing
+```{r}
+data <- subset(raw_data, select = -c(conf_cases, prob_cases, pnew_case, conf_death, prob_death, pnew_death, created_at, submission_date
+))
+data
+```
+
+
+```{r}
+unique(raw_data$state)
+```
+```{r}
+new_data <- raw_data[raw_data$state %in% c("CO", "SC", "NE", "AZ", "KY", "ND"), ]
+unique(new_data$state)
+```
+# Modelling the rise
+```{r}
+rise_model <- new_data[new_data$state %in% c("CO", "SC", "NE"), ]
+unique(rise_model$state)
+rise_model
+```
+
+```{r}
+rise_model <- subset(rise_model, select = -c(conf_cases, prob_cases, pnew_case, conf_death, prob_death, pnew_death))
+```
+
+
+```{r}
+rise_model <- na.omit(rise_model)
+```
+
+```{r}
+rise_model <- rise_model[rise_model$tot_cases != 0,]
+```
+
+```{r}
+#rise_model$submission_date <- as.Date(rise_model$submission_date)
+```
+
+```{r}
+rise_model$submission_date <- lubridate::mdy(as.character(rise_model$submission_date))
+```
+
+```{r}
+#rise_model$submission_date <- as.Date(rise_model$submission_date)
+```
+
+```{r}
+rise_model
+```
+```{r}
+rise_model <- rise_model[order(rise_model$submission_date) , ]
+rise_model
+```
+
+```{r fig.height=5, fig.width=10}
+CO_data <- rise_model[rise_model$state == "CO",]
+co_plt <- ggplot(CO_data, aes(x=submission_date, y=tot_cases)) +
+  geom_point(shape=23, fill="blue", color="darkred", size=3)+xlab("Submission Dates")+ylab("Total Cases")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")+ggtitle("CO state Rise in cases by dates")
+co_plt
+```
+
+```{r fig.height=5, fig.width=10}
+SC_data <- rise_model[rise_model$state == "SC",]
+sc_plt <- ggplot(SC_data, aes(x=submission_date, y=tot_cases)) +
+  geom_point(shape=23, fill="red", color="darkred", size=3)+xlab("Submission Dates")+ylab("Total Cases")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")+ggtitle("SC state Rise in cases by dates")
+sc_plt
+```
+
+```{r fig.height=5, fig.width=10}
+NE_data <- rise_model[rise_model$state == "NE",]
+ne_plt <- ggplot(NE_data, aes(x=submission_date, y=tot_cases)) +
+  geom_point(shape=23, fill="yellow", color="darkred", size=3)+xlab("Submission Dates")+ylab("Total Cases")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")+ggtitle("NE state Rise in cases by dates")
+ne_plt
+```
+
+# Analyzing Relation Between Cases and Deaths
+```{r}
+co_totcase <- sum(rise_model[rise_model$state == "CO","tot_cases"])
+sc_totcase <- sum(rise_model[rise_model$state == "SC","tot_cases"])
+ne_totcase <- sum(rise_model[rise_model$state == "NE","tot_cases"])
+totcase <- data.frame(State = c("CO","SC","NE"),Total = c(co_totcase,sc_totcase,ne_totcase))
+totcase
+```
+
+```{r}
+ggplot(data=totcase, aes(x=State, y=Total)) +
+  geom_bar(stat="identity", fill="steelblue")+
+  geom_text(aes(label=Total), vjust=1.6, color="white", size=3.5)+theme_bw()
+```
+```{r}
+co_totdeath <- sum(rise_model[rise_model$state == "CO","tot_death"])
+sc_totdeath <- sum(rise_model[rise_model$state == "SC","tot_death"])
+ne_totdeath <- sum(rise_model[rise_model$state == "NE","tot_death"])
+totdeath <- data.frame(State = c("CO","SC","NE"),Total = c(co_totdeath,sc_totdeath,ne_totdeath))
+totdeath
+```
+
+```{r}
+ggplot(data=totdeath, aes(x=State, y=Total)) +
+  geom_bar(stat="identity", fill="steelblue")+
+  geom_text(aes(label=Total), vjust=1.6, color="white", size=3.5)+theme_bw()
+```
+
+```{r fig.height=5, fig.width=15}
+SC_death <- rise_model[rise_model$state == "SC",]
+sc_death_plt <- ggplot(SC_death, aes(x=submission_date, y=tot_death)) +
+  geom_point(shape=20, fill="red", color="darkred", size=3)+xlab("Submission Dates")+ylab("Total Cases")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")+ggtitle("SC state rise in death")
+sc_death_plt
+```
+
+```{r fig.height=5, fig.width=15}
+NE_death <- rise_model[rise_model$state == "NE",]
+ne_death_plt <- ggplot(NE_death, aes(x=submission_date, y=tot_death)) +
+  geom_point(shape=20, fill="red", color="darkred", size=3)+xlab("Submission Dates")+ylab("Total Cases")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")+ggtitle("NE state rise in death")
+ne_death_plt
+```
+```{r fig.height=5, fig.width=15}
+CO_death <- rise_model[rise_model$state == "CO",]
+co_death_plt <- ggplot(CO_death, aes(x=submission_date, y=tot_death)) +
+  geom_point(shape=20, fill="red", color="darkred", size=3)+xlab("Submission Dates")+ylab("Total Cases")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")+ggtitle("CO state rise in death")
+co_death_plt
+```
+```{r fig.height=5, fig.width=15}
+NE_death_case <- rise_model[rise_model$state == "NE",]
+ne_death_case_plt <- ggplot(NE_death_case, aes(x=tot_cases, y=tot_death)) +
+  geom_point(shape=20, fill="red", color="darkred", size=3)+xlab("Total Cases")+ylab("Total Deaths")+ggtitle("Total Cases vs Deaths for NE")
+ne_death_case_plt
+```
+```{r fig.height=5, fig.width=15}
+SC_death_case <- rise_model[rise_model$state == "SC",]
+sc_death_case_plt <- ggplot(SC_death_case, aes(x=tot_cases, y=tot_death)) +
+  geom_point(shape=20, fill="red", color="darkred", size=3)+xlab("Total Cases")+ylab("Total Deaths")+ggtitle("Total Cases vs Deaths for SC")
+sc_death_case_plt
+```
+
+```{r fig.height=5, fig.width=15}
+CO_death_case <- rise_model[rise_model$state == "CO",]
+co_death_case_plt <- ggplot(CO_death_case, aes(x=tot_cases, y=tot_death)) +
+  geom_point(shape=20, fill="red", color="darkred", size=3)+xlab("Total Cases")+ylab("Total Deaths")+ggtitle("Total Cases vs Deaths for CO")
+co_death_case_plt
+```
+```{r}
+SC <- c(sc_totcase, sc_totdeath)
+CO <- c(co_totcase, co_totdeath)
+NE <- c(ne_totcase, ne_totdeath)
+
+sdata <- cbind(SC,CO,NE)
+
+barplot(sdata, beside=T)
+```
+# Correlations
+```{r}
+cordata <- new_data[new_data$state %in% c("AZ", "KY", "ND"), ]
+cordata
+```
+```{r}
+azdata <- new_data[new_data$state %in% c("AZ"), ]
+cor(azdata$tot_cases, azdata$tot_death)
+cor.test(azdata$tot_cases, azdata$tot_death)
+```
+```{r}
+kydata <- new_data[new_data$state %in% c("KY"), ]
+cor(kydata$tot_cases, kydata$tot_death)
+cor.test(kydata$tot_cases, kydata$tot_death)
+```
+
+```{r}
+nddata <- new_data[new_data$state %in% c("ND"), ]
+cor(nddata$tot_cases, nddata$tot_death)
+cor.test(nddata$tot_cases, nddata$tot_death)
+```
+
+```{r}
+x1 <- CO_data$submission_date
+y1 <- CO_data$tot_cases
+y2 <- SC_data$tot_cases
+y3 <- NE_data$tot_cases
+
+length(y1) <- length(x1)
+length(y2) <- length(x1)
+length(y3) <- length(x1)
+
+df <- data.frame(x=x1, yy1 = y1, yy2=y2, yy3 = y3)
+df
+```
+```{r}
+length(CO_data$submission_date)
+length(SC_data$submission_date)
+length(NE_data$submission_date)
+```
+
+
+```{r fig.height=5, fig.width=10}
+
+
+  
+plt <- ggplot(df, aes(x)) +  
+    geom_line(aes(y = yy1), color = "black") +
+     geom_line(aes(y = yy2), color = "red") +
+    geom_line(aes(y = yy3), color = "green")+scale_x_date(date_breaks = "2 week",date_labels = "%Y-%m")
+plt
+```
+
+```{r}
+d1 <- CO_data$submission_date
+y1 <- CO_data$tot_death
+y2 <- SC_data$tot_death
+y3 <- NE_data$tot_death
+
+length(y1) <- length(d1)
+length(y2) <- length(d1)
+length(y3) <- length(d1)
+
+df <- data.frame(x=d1, yy1 = y1, yy2=y2, yy3 = y3)
+df
+```
+```{r fig.height=5, fig.width=10}
+plt <- ggplot(df, aes(x)) +  
+    geom_line(aes(y = yy1), color = "black") +
+     geom_line(aes(y = yy2), color = "red") +
+    geom_line(aes(y = yy3), color = "green")
+plt
+```
+# Data Propocessing for Model Training
+```{r}
+encode_ordinal <- function(x, order = unique(x)) {
+  x <- as.numeric(factor(x, levels = order, exclude = NULL))
+  x
+}
+```
+
+```{r}
+data
+```
+# Taking Care of Missing Data
+```{r}
+data <- na.exclude(data)
+```
+
+# Handling Categorical Features
+```{r}
+#data$consent_cases <- encode_ordinal(data$consent_cases)
+data$consent_cases <- factor(data$consent_cases,
+                       levels = c('Agree', 'Not agree'),
+                       labels = c(1, 0))
+data$consent_cases <- as.numeric(as.character(data$consent_cases))
+```
+
+```{r}
+table(data$consent_cases)
+```
+
+
+```{r}
+data_consent <- subset(data, select = -c(consent_deaths))
+data_consent$state <- encode_ordinal(data$state)
+```
+
+```{r}
+data_consent <- na.exclude(data_consent)
+```
+
+```{r}
+sum(is.na(data_consent) == TRUE)
+```
+
+# Feature Scaling
+
+```{r}
+data_consent[,2:5] <- scale(data_consent[,2:5])
+```
+```{r}
+data_consent
+```
+
+
+```{r}
+split = sample.split(data_consent$consent_cases,SplitRatio = 0.8)
+train_mlr <- subset(data_consent,split== TRUE)
+test_mlr <- subset(data_consent, split == FALSE)
+```
+
+
+```{r}
+class(train_mlr$consent_cases)
+```
+
+
+# Multiple Linear Regression
+```{r}
+regressor <- lm(consent_cases ~ state + tot_cases + new_case + tot_death + new_death, data=train_mlr)
+summary(regressor)
+```
+
+```{r}
+y_pred = predict(regressor, newdata = test_mlr)
+y_pred <- ifelse(y_pred >0.5, 1, 0)
+```
+
+```{r}
+mean_squared_error <- mean(( y_pred - test_mlr$consent_cases)^2)
+mean_absolute_error <- mean(abs(y_pred-test_mlr$consent_cases))
+root_mean_sqr <- sqrt(mean_squared_error)
+cat("Mean Squared Error: ",mean_squared_error)
+cat("\nMean Absolute Error: ",mean_absolute_error)
+cat("\nRoot Mean Square: ",root_mean_sqr)
+```
+
+```{r}
+data.frame(
+  Prediction = y_pred,
+  "Actucal Values" = test_mlr$consent_cases
+)
+```
+
+
+
+```{r fig.height=10}
+avPlots(regressor)
+```
+```{r}
+# ROC-AUC Curve
+ROCPred <- prediction(y_pred, test_mlr$consent_cases) 
+ROCPer <- performance(ROCPred, measure = "tpr", 
+                             x.measure = "fpr")
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+
+
+```{r fig.width=10}
+# Plotting curve
+plot(ROCPer)
+plot(ROCPer, colorize = TRUE, 
+     print.cutoffs.at = seq(0.1, by = 0.1), 
+     main = "ROC CURVE")
+abline(a = 0, b = 1)
+   
+auc <- round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+
+# Logistic Regression
+```{r}
+#install.packages("caTools")    # For Logistic regression
+#install.packages("ROCR") 
+```
+
+
+
+```{r}
+# Splitting dataset
+split <- sample.split(data_consent, SplitRatio = 0.8)
+train_reg <- subset(data_consent, split == "TRUE")
+test_reg <- subset(data_consent, split == "FALSE")
+```
+
+
+```{r}
+logistic_model <- glm(consent_cases ~ state + tot_cases + new_case + tot_death + new_death, data=train_mlr, 
+                      family = "binomial")
+   
+# Summary
+summary(logistic_model)
+
+# Predict test data based on model
+predict_reg <-predict(logistic_model, 
+                       test_mlr, type = "response")
+```
+
+```{r}
+# Changing probabilities
+predict_reg <- ifelse(predict_reg >0.5, 1, 0)
+```
+
+```{r}
+length(test_reg$consent_cases)
+length(predict_reg)
+```
+```{r}
+length(predict_reg) <- length(test_reg$consent_cases)
+```
+
+
+
+```{r}
+df <- data.frame(
+  Prediction = predict_reg,
+  "Actucal Values" = test_reg$consent_cases
+)
+```
+
+
+```{r}
+sum(is.na(df))
+df <- na.exclude(df)
+sum(is.na(df))
+```
+
+
+```{r}
+mean_squared_error_lg <- mean(( df$Prediction - df$Actucal.Values)^2)
+mean_absolute_error_lg <- mean(abs(df$Prediction-df$Actucal.Values))
+root_mean_sqr_lg <- sqrt(mean_squared_error_lg)
+cat("Mean Squared Error: ",mean_squared_error_lg)
+cat("\nMean Absolute Error: ",mean_absolute_error_lg)
+cat("\nRoot Mean Square: ",root_mean_sqr_lg)
+```
+
+
+```{r}
+# Evaluating model accuracy
+# using confusion matrix
+table(test_reg$consent_cases, predict_reg)
+```
+
+```{r}
+predict_reg <- na.exclude(predict_reg)
+```
+
+```{r}
+predict_reg <- ifelse(predict_reg >0.5, 1, 0)
+```
+
+
+
+
+
+```{r}
+# ROC-AUC Curve
+ROCPred <- prediction(predict_reg, df$Actucal.Values)
+ROCPer <- performance(ROCPred, measure = "tpr", 
+                             x.measure = "fpr")
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+
+
+```{r fig.width=10}
+# Plotting curve
+plot(ROCPer)
+plot(ROCPer, colorize = TRUE, 
+     print.cutoffs.at = seq(0.1, by = 0.1), 
+     main = "ROC CURVE")
+abline(a = 0, b = 1)
+auc <- round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+
+<center> <h1>THANK YOU</h1> </center>
+
+<center>![""](./assets/ThankYou.jpg){width=80%} </center>
+
+
+
